@@ -1,6 +1,8 @@
 # Workout visualizing
 
-This repository contains scripts for visualizing and analyzing a workout file from a GPS-watch or similar device. The scripts currently support the following file formats:
+This repository contains scripts for visualizing and analyzing a workout file from a GPS-watch or similar device. The code is a work in progress, and the only operative functions are currently for basic plotting of the workout data. 
+
+The script currently support the following file formats:
 
 - .json
 
