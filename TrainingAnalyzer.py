@@ -3,23 +3,41 @@
 #==========================================================================
 # Program by Erik Johannes B. L. G. Husom on 2018-12-22 for Python 3.6.4
 # Description: Class for analyzing workouts
+#
+# Accepted file formats:
+# - .json
+#
+# Plot options:
+# - Plot only GPS track with matplotlib or bokeh
+# - Plot heart rate, speed, elevation and GPS in individual plots with
+#   matplotlib or bokeh
+# - Plot heart rate, speed and elevation (in same plot) and GPS with bokeh
+#
 # USAGE:
+# $ python3 TrainingAnalyzer.py [filename]
+# Currently no way of choosing plot without changing the function called at
+# the bottom of this file manually.
 #==========================================================================
+
 # IMPORT STATEMENTS
 import numpy as np
-import sys, os, time, io, json, fitparse, pprint, csv
+import sys, os, time, io, json, pprint, csv
 import matplotlib.pyplot as plt
 from matplotlib.gridspec import GridSpec
 from bokeh.plotting import figure
 from bokeh.io import output_file, show
-from bokeh.models import HoverTool, Range1d, LinearAxis, BoxAnnotation, CustomJS, ColumnDataSource, Text, Circle
+from bokeh.models import HoverTool, Range1d, LinearAxis, BoxAnnotation, CustomJS, ColumnDataSource, Text, Circle, ColorBar
 from bokeh.layouts import column, row
 from bokeh.tile_providers import CARTODBPOSITRON
+from bokeh.transform import linear_cmap
+from bokeh.palettes import Spectral6
+# import fitparse
 
 class TrainingAnalyzer(object):
     def __init__(self, workoutFile):
         self.workoutFile = workoutFile
         filename, fileExtension = os.path.splitext(self.workoutFile)
+
         # Read json-file
         if (fileExtension=='.json'):
             data = json.load(io.open(workoutFile, 'r', encoding='utf-8-sig'))
@@ -47,28 +65,69 @@ class TrainingAnalyzer(object):
             self.elevation = np.array(elevation)
             self.latitude = np.array(latitude)
             self.longitude = np.array(longitude)
-            self.mercatorCoordinates = self.getMercatorCoordinates(self.latitude, self.longitude)
-        elif (fileExtension=='.fit'):
-            fitfile = fitparse.FitFile(workoutFile, data_processor=fitparse.StandardUnitsDataProcessor())
-            for record in fitfile.get_messages('record'):
+            self.mercatorCoordinates = self.convert_to_mercator_coordinates(self.latitude, self.longitude)
+#        elif (fileExtension=='.fit'):
+#            ################################################
+#            # TODO: Add support for .fit
+#            fitfile = fitparse.FitFile(workoutFile, data_processor=fitparse.StandardUnitsDataProcessor())
+#            for record in fitfile.get_messages('record'):
+#
+#                # Go through all the data entries in this record
+#                for record_data in record:
+#
+#                    # Print the records name and value (and units if it has any)
+#                    if record_data.units:
+#                        print(" * %s: %s %s" % (
+#                            record_data.name, record_data.value, record_data.units,
+#                        ))
+#                    else:
+#                        print(" * %s: %s" % (record_data.name, record_data.value))
+#                print()
+#
+#            #################################################
 
-                # Go through all the data entries in this record
-                for record_data in record:
+        else:
+            print("Wring file format. Only .json supported")
+            sys.exit(1)
 
-                    # Print the records name and value (and units if it has any)
-                    if record_data.units:
-                        print(" * %s: %s %s" % (
-                            record_data.name, record_data.value, record_data.units,
-                        ))
-                    else:
-                        print(" * %s: %s" % (record_data.name, record_data.value))
-                print()
+    def map_plot_mpl(self):
+        """Plots GPS track with matplotlib."""
+        # TODO: Add background map layer for GPS plot.
+
+        fig = plt.figure(figsize=(12,12))
+        ax = fig.add_subplot(111)
+        ax.set_aspect(1.8)
+        plt.axis('off')
+        fig.patch.set_facecolor('black')
+
+        # Plotting GPS track with elevation as colorbar:
+        plt.scatter(self.longitude,self.latitude,c=self.elevation)
+
+        plt.show()
+
+    def map_plot_bokeh(self):
+        """Plots GPS track with bokeh, generating a html-file."""
+
+        output_file("gps_track.html", title="GPS track visualization")
+        source = ColumnDataSource({'seconds' : self.seconds, 'minutes' : self.minutes, 'heartrate' : self.heartrate, 'speed' : self.kph, 'elevation' : self.elevation, 'xCoordinates' : self.mercatorCoordinates[0], 'yCoordinates' : self.mercatorCoordinates[1]})
 
 
+        # mapper = linear_cmap(field_name='heartrate', palette=Spectral6, low=0, high=1000)#, low=min(self.elevation), high=max(self.elevation))
 
 
+        # Adding map plot
+        mapPlot = figure(x_range=(np.min(self.mercatorCoordinates[0])-600, np.max(self.mercatorCoordinates[0])+600), y_range=(np.min(self.mercatorCoordinates[1])-600, np.max(self.mercatorCoordinates[1])+600), x_axis_type="mercator", y_axis_type="mercator")
+        mapPlot.add_tile(CARTODBPOSITRON)
+        mapLine = mapPlot.line(x = 'xCoordinates', y = 'yCoordinates', source=source)#, line_color=mapper, color=mapper)
+        mapPlot.axis.visible = False
 
-    def plotWithMPL(self):
+        show(mapPlot)
+
+    def workout_plot_mpl(self):
+        """Plot heart rate, speed, elevation and GPS track with matplotlib."""
+        # FIXME: GPS plot has wrong axes ratio.
+        # TODO: Add background map layer for GPS plot.
+
         plt.style.use('seaborn')
         plt.rcParams.update({'font.size': 15})
         plt.rc('xtick', labelsize=15)
@@ -91,12 +150,12 @@ class TrainingAnalyzer(object):
         plt.ylabel('elevation [m]')
 
         plt.subplot(gs1[:,1])
-        plt.plot(self.latitude,self.longitude)
+        plt.plot(self.longitude, self.latitude)
         plt.axis('equal')
 
         plt.show()
 
-    def singlePlotsWithBokeh(self):
+    def workout_singleplot_bokeh(self):
 
         output_file("workoutData.html")
         plotwidth = 800
@@ -121,7 +180,7 @@ class TrainingAnalyzer(object):
 
         show(column(plotHR, plotSpeed, plotElevation, plotMap))
 
-    def multiplotWithBokeh(self):
+    def workout_multiplot_bokeh(self):
 
 
         output_file("workoutData.html")
@@ -192,8 +251,9 @@ class TrainingAnalyzer(object):
 
         show(row(multiplot, mapPlot))
 
+    def convert_to_mercator_coordinates(self, lat, lon):
+        """Converts coordinates to Mercator projection."""
 
-    def getMercatorCoordinates(self, lat, lon):
         r_major = 6378137.000
         x = r_major * np.radians(lon)
         scale = x/lon
@@ -202,7 +262,17 @@ class TrainingAnalyzer(object):
 
 
 if __name__ == '__main__':
-    workoutFile = sys.argv[1]
+    try:
+        workoutFile = sys.argv[1]
+    except IndexError:
+        print('Give name of workout file as command line argument.')
+        sys.exit(1)
 
     workout = TrainingAnalyzer(workoutFile)
-    workout.multiplotWithBokeh()
+
+    # TODO: Make it possible to choose plot from command line.
+    #workout.map_plot_mpl()
+    #workout.map_plot_bokeh()
+    #workout.workout_plot_mpl()
+    #workout.workout_singleplot_bokeh()
+    workout.workout_multiplot_bokeh()

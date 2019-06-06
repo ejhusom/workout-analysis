@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 #==========================================================================
 # Program by Erik Johannes B. L. G. Husom on 2018-12-17 for Python 3.6.4
-# Description: Script for analyzing one or several workout filess
+# Description: Script for analyzing one or several workout files
 # USAGE:
 #==========================================================================
 # IMPORT STATEMENTS
