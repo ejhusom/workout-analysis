@@ -19,4 +19,4 @@ Planned support for:
 
 ## TrainingVisualizer.py
 
-Working on support for .fit format.
+The class contains five different plot options, but currently the wanted plot option has to be chosen by changing the function calls at the bottom of the script.
