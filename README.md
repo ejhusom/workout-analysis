@@ -1,4 +1,4 @@
-# Workout visualizing
+# Workout analysis
 
 This repository contains scripts for visualizing and analyzing a workout file from a GPS-watch or similar device. The code is a work in progress, and the only operative functions are currently for basic plotting of the workout data. 
 
