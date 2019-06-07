@@ -32,15 +32,15 @@ def readAllWorkouts():
     SkippedCount = 0
     workoutCount = 0
 
-    for file in os.listdir("/home/ejhusom/MEGAsync/01_Interesser/02_Idrett/01_Treningsdata/Athlete Library/Erik Johannes/activities"):
+    for file in os.listdir("/Downloads/"):
         filename = os.fsdecode(file)
         workoutCount += 1
 
 
 
         try:
-            # data = json.load(io.open("/home/ejhusom/MEGAsync/01_Interesser/02_Idrett/01_Treningsdata/Athlete Library/Erik Johannes/activities/" + filename, 'r', encoding='utf-8-sig'))
-            data = json.load(codecs.open("/home/ejhusom/MEGAsync/01_Interesser/02_Idrett/01_Treningsdata/Athlete Library/Erik Johannes/activities/" + filename, "r", "utf-8-sig"))
+            # data = json.load(io.open("/Downloads/" + filename, 'r', encoding='utf-8-sig'))
+            data = json.load(codecs.open("/Downloads/" + filename, "r", "utf-8-sig"))
             # totalDuration += data["RIDE"]["SAMPLES"][-1]["SECS"]
         except:
             SkippedCount += 1
