@@ -28,10 +28,9 @@ from bokeh.plotting import figure
 from bokeh.io import output_file, show
 from bokeh.models import HoverTool, Range1d, LinearAxis, BoxAnnotation, CustomJS, ColumnDataSource, Text, Circle, ColorBar
 from bokeh.layouts import column, row
-from bokeh.tile_providers import get_provider, Vendors
+from bokeh.tile_providers import CARTODBPOSITRON
 from bokeh.transform import linear_cmap
 from bokeh.palettes import Spectral6
-from xml.dom import minidom
 # import fitparse
 
 class TrainingAnalyzer(object):
@@ -67,16 +66,6 @@ class TrainingAnalyzer(object):
             self.latitude = np.array(latitude)
             self.longitude = np.array(longitude)
             self.mercatorCoordinates = self.convert_to_mercator_coordinates(self.latitude, self.longitude)
-        elif (fileExtension == ".gpx"):
-            with open(workoutFile, "r") as f:
-                data = f
-
-            xmldoc = minidom.parse(data)
-            self.track = xmldoc.getElementsByTagName('trkpt')
-            self.elevation = xmldoc.getElementsByTagName('ele')
-            self.datetime = xmldoc.getElementsByTagName('time')
-            self.n_track = len(track)
-
 #        elif (fileExtension=='.fit'):
 #            ################################################
 #            # TODO: Add support for .fit
@@ -101,7 +90,7 @@ class TrainingAnalyzer(object):
             print("Wring file format. Only .json supported")
             sys.exit(1)
 
-    def plot_map_mpl(self):
+    def map_plot_mpl(self):
         """Plots GPS track with matplotlib."""
         # TODO: Add background map layer for GPS plot.
 
@@ -115,6 +104,24 @@ class TrainingAnalyzer(object):
         plt.scatter(self.longitude,self.latitude,c=self.elevation)
 
         plt.show()
+
+    def map_plot_bokeh(self):
+        """Plots GPS track with bokeh, generating a html-file."""
+
+        output_file("gps_track.html", title="GPS track visualization")
+        source = ColumnDataSource({'seconds' : self.seconds, 'minutes' : self.minutes, 'heartrate' : self.heartrate, 'speed' : self.kph, 'elevation' : self.elevation, 'xCoordinates' : self.mercatorCoordinates[0], 'yCoordinates' : self.mercatorCoordinates[1]})
+
+
+        # mapper = linear_cmap(field_name='heartrate', palette=Spectral6, low=0, high=1000)#, low=min(self.elevation), high=max(self.elevation))
+
+
+        # Adding map plot
+        mapPlot = figure(x_range=(np.min(self.mercatorCoordinates[0])-600, np.max(self.mercatorCoordinates[0])+600), y_range=(np.min(self.mercatorCoordinates[1])-600, np.max(self.mercatorCoordinates[1])+600), x_axis_type="mercator", y_axis_type="mercator")
+        mapPlot.add_tile(CARTODBPOSITRON)
+        mapLine = mapPlot.line(x = 'xCoordinates', y = 'yCoordinates', source=source)#, line_color=mapper, color=mapper)
+        mapPlot.axis.visible = False
+
+        show(mapPlot)
 
     def workout_plot_mpl(self):
         """Plot heart rate, speed, elevation and GPS track with matplotlib."""
@@ -168,18 +175,18 @@ class TrainingAnalyzer(object):
         plotElevation.line(self.minutes, self.elevation, color='green')
 
         plotMap = figure(x_range=(np.min(self.mercatorCoordinates[0])-600, np.max(self.mercatorCoordinates[0])+600), y_range=(np.min(self.mercatorCoordinates[1])-600, np.max(self.mercatorCoordinates[1])+600), x_axis_type="mercator", y_axis_type="mercator")
-        # plotMap.add_tile(CARTODBPOSITRON)
-        plotMap.add_tile(get_provider(Vendors.CARTODBPOSITRON))
+        plotMap.add_tile(CARTODBPOSITRON)
         plotMap.line(x = self.mercatorCoordinates[0], y = self.mercatorCoordinates[1])
 
         show(column(plotHR, plotSpeed, plotElevation, plotMap))
 
     def workout_multiplot_bokeh(self):
 
+
         output_file("workoutData.html")
         plotheight = 400
-        plotwidth = 1200
-        self.source = ColumnDataSource({'seconds' : self.seconds, 'minutes' : self.minutes, 'heartrate' : self.heartrate, 'speed' : self.kph, 'elevation' : self.elevation, 'xCoordinates' : self.mercatorCoordinates[0], 'yCoordinates' : self.mercatorCoordinates[1]})
+        plotwidth = 900
+        source = ColumnDataSource({'seconds' : self.seconds, 'minutes' : self.minutes, 'heartrate' : self.heartrate, 'speed' : self.kph, 'elevation' : self.elevation, 'xCoordinates' : self.mercatorCoordinates[0], 'yCoordinates' : self.mercatorCoordinates[1]})
         multiplot = figure(title="Workout", x_axis_label='time [minutes]', plot_width=plotwidth, plot_height=plotheight, toolbar_location="below")
 
         source1 = ColumnDataSource({'hiddenX' : [], 'hiddenY' : []})
@@ -208,21 +215,18 @@ class TrainingAnalyzer(object):
         multiplot.extra_y_ranges['elevation'] = Range1d(start=np.min(self.elevation)-10, end=np.max(self.elevation)+10)
         multiplot.add_layout(LinearAxis(y_range_name='elevation', axis_label='Elevation [m]'), 'right')
         multiplot.add_tools(multihover)
-        multiplot.line(self.minutes, self.heartrate, legend_label="HR", color="red")
-        multiplot.line(self.minutes, self.kph, legend_label="Speed", y_range_name="kph", color="blue")
-        multiplot.line(self.minutes, self.elevation, legend_label="Elevation", y_range_name="elevation", color="green")
+        multiplot.line(self.minutes, self.heartrate, legend="HR", color="red")
+        multiplot.line(self.minutes, self.kph, legend="Speed", y_range_name="kph", color="blue")
+        multiplot.line(self.minutes, self.elevation, legend="Elevation", y_range_name="elevation", color="green")
+        # multiplot.line(x='minutes', y='heartrate', source=source, legend="Heartrate", color="red")
+        # multiplot.line('minutes', 'speed', source=source, legend="Speed", y_range_name="kph", color="blue")
+        # multiplot.line('minutes', 'elevation', source=source, legend="Elevation", y_range_name="elevation", color="green")
         multiplot.legend.click_policy="hide"
 
-        self.plot_map_bokeh()
-
-        show(column(multiplot, self.mapPlot))
-
-    def plot_map_bokeh(self):
         # Adding map plot
-        self.mapPlot = figure(x_range=(np.min(self.mercatorCoordinates[0])-600, np.max(self.mercatorCoordinates[0])+600), y_range=(np.min(self.mercatorCoordinates[1])-600, np.max(self.mercatorCoordinates[1])+600), x_axis_type="mercator", y_axis_type="mercator")
-        self.mapPlot.add_tile(get_provider(Vendors.CARTODBPOSITRON))
-        self.mapLine = self.mapPlot.line(x = 'xCoordinates', y =
-                'yCoordinates', source=self.source)
+        mapPlot = figure(x_range=(np.min(self.mercatorCoordinates[0])-600, np.max(self.mercatorCoordinates[0])+600), y_range=(np.min(self.mercatorCoordinates[1])-600, np.max(self.mercatorCoordinates[1])+600), x_axis_type="mercator", y_axis_type="mercator")
+        mapPlot.add_tile(CARTODBPOSITRON)
+        mapLine = mapPlot.line(x = 'xCoordinates', y = 'yCoordinates', source=source)
         # mapCircles = mapPlot.circle('hiddenX', 'hiddenY', size=5, source=source1)
         #
         # code = """
@@ -244,9 +248,8 @@ class TrainingAnalyzer(object):
         # mapPlot.add_tools(mapHover)
         # multiplot.add_tools(multihover)
 
-        return self.mapPlot
 
-
+        show(row(multiplot, mapPlot))
 
     def convert_to_mercator_coordinates(self, lat, lon):
         """Converts coordinates to Mercator projection."""
@@ -268,7 +271,8 @@ if __name__ == '__main__':
     workout = TrainingAnalyzer(workoutFile)
 
     # TODO: Make it possible to choose plot from command line.
-    # workout.map_plot_mpl()
-    # workout.workout_plot_mpl()
-    # workout.workout_singleplot_bokeh()
-    # workout.workout_multiplot_bokeh()
+    #workout.map_plot_mpl()
+    #workout.map_plot_bokeh()
+    #workout.workout_plot_mpl()
+    #workout.workout_singleplot_bokeh()
+    workout.workout_multiplot_bokeh()
