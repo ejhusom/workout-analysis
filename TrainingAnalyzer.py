@@ -174,53 +174,87 @@ class TrainingAnalyzer(object):
 
         show(column(plotHR, plotSpeed, plotElevation, plotMap))
 
-    def workout_multiplot_bokeh(self):
 
-        output_file("workoutData.html")
-        plotheight = 400
-        plotwidth = 1200
-        self.source = ColumnDataSource({'seconds' : self.seconds, 'minutes' : self.minutes, 'heartrate' : self.heartrate, 'speed' : self.kph, 'elevation' : self.elevation, 'xCoordinates' : self.mercatorCoordinates[0], 'yCoordinates' : self.mercatorCoordinates[1]})
-        multiplot = figure(title="Workout", x_axis_label='time [minutes]', plot_width=plotwidth, plot_height=plotheight, toolbar_location="below")
+    def create_plot(self, backend="bokeh"):
 
-        source1 = ColumnDataSource({'hiddenX' : [], 'hiddenY' : []})
+        output_file("workout_plot.html")
+        self.plotheight = 400
+        self.plotwidth = 1200
+        self.source = ColumnDataSource({
+            'seconds' : self.seconds, 
+            'minutes' : self.minutes, 
+            'heartrate' : self.heartrate, 
+            'speed' : self.kph,
+            'elevation' : self.elevation, 
+            'xCoordinates' : self.mercatorCoordinates[0], 
+            'yCoordinates' : self.mercatorCoordinates[1]
+        })
 
-        # Adding hover tool
+        self.workout_plot = figure(title="Workout", x_axis_label='time [minutes]',
+                plot_width=self.plotwidth, plot_height=self.plotheight, toolbar_location="below")
+
+        self.workout_plot.yaxis.visible = False
+        self.source1 = ColumnDataSource({'hiddenX' : [], 'hiddenY' : []})
+
+        self.add_heartrate_zones()
+        self.plot_heartrate()
+        self.plot_speed()
+        self.plot_elevation()
+        self.plot_map_bokeh()
+
         multihover = HoverTool(tooltips=[("", "@y")], mode="vline", point_policy="snap_to_data")
+        self.workout_plot.add_tools(multihover)
+        self.workout_plot.legend.click_policy="hide"
 
-        # Adding shades of HR zones in plot
+        show(column(self.workout_plot, self.mapPlot))
+
+
+    def add_heartrate_zones(self):
+
         HRzoneLimits = [133,152,161,171]
         HRzone1 = BoxAnnotation(top=HRzoneLimits[0], fill_alpha=0.1, fill_color='darkgreen')
         HRzone2 = BoxAnnotation(bottom=HRzoneLimits[0], top=HRzoneLimits[1], fill_alpha=0.1, fill_color='lawngreen')
         HRzone3 = BoxAnnotation(bottom=HRzoneLimits[1], top=HRzoneLimits[2], fill_alpha=0.1, fill_color='yellow')
         HRzone4 = BoxAnnotation(bottom=HRzoneLimits[2], top=HRzoneLimits[3], fill_alpha=0.1, fill_color='orange')
         HRzone5 = BoxAnnotation(bottom=HRzoneLimits[3], fill_alpha=0.1, fill_color='red')
-        multiplot.add_layout(HRzone1)
-        multiplot.add_layout(HRzone2)
-        multiplot.add_layout(HRzone3)
-        multiplot.add_layout(HRzone4)
-        multiplot.add_layout(HRzone5)
+        self.workout_plot.add_layout(HRzone1)
+        self.workout_plot.add_layout(HRzone2)
+        self.workout_plot.add_layout(HRzone3)
+        self.workout_plot.add_layout(HRzone4)
+        self.workout_plot.add_layout(HRzone5)
 
-        # Adding lines
-        multiplot.yaxis.axis_label = 'Heartrate [bpm]'
-        multiplot.y_range = Range1d(start=np.min(self.heartrate)-10, end=np.max(self.heartrate)+10)
-        multiplot.extra_y_ranges['kph'] = Range1d(start=0, end=np.max(self.kph)+2)
-        multiplot.add_layout(LinearAxis(y_range_name='kph', axis_label='Speed [kph]'), 'left')
-        multiplot.extra_y_ranges['elevation'] = Range1d(start=np.min(self.elevation)-10, end=np.max(self.elevation)+10)
-        multiplot.add_layout(LinearAxis(y_range_name='elevation', axis_label='Elevation [m]'), 'right')
-        multiplot.add_tools(multihover)
-        multiplot.line(self.minutes, self.heartrate, legend_label="HR", color="red")
-        multiplot.line(self.minutes, self.kph, legend_label="Speed", y_range_name="kph", color="blue")
-        multiplot.line(self.minutes, self.elevation, legend_label="Elevation", y_range_name="elevation", color="green")
-        multiplot.legend.click_policy="hide"
+    
+    def plot_heartrate(self):
 
-        self.plot_map_bokeh()
+        # multiplot.yaxis.axis_label = 'Heartrate [bpm]'
+        # self.workout_plot.y_range = Range1d(start=np.min(self.heartrate)-10,
+        #         end=np.max(self.heartrate)+10)
+        # self.workout_plot.line(self.minutes, self.heartrate, legend_label="HR", color="red")
+        self.workout_plot.extra_y_ranges['heartrate'] = Range1d(
+                start=np.min(self.heartrate)-10, end=np.max(self.heartrate)+10)
+        self.workout_plot.add_layout(LinearAxis(y_range_name='heartrate',
+            axis_label='Heart rate [bpm]'), 'left')
+        self.workout_plot.line(self.minutes, self.heartrate, legend_label="HR",
+                y_range_name="heartrate", color="red")
 
-        show(column(multiplot, self.mapPlot))
+    def plot_speed(self):
+
+        self.workout_plot.extra_y_ranges['kph'] = Range1d(start=0, end=np.max(self.kph)+2)
+        self.workout_plot.add_layout(LinearAxis(y_range_name='kph', axis_label='Speed [kph]'), 'left')
+        self.workout_plot.line(self.minutes, self.kph, legend_label="Speed", y_range_name="kph", color="blue")
+
+    def plot_elevation(self):
+
+        self.workout_plot.extra_y_ranges['elevation'] = Range1d(start=np.min(self.elevation)-10, end=np.max(self.elevation)+10)
+        self.workout_plot.add_layout(LinearAxis(y_range_name='elevation', axis_label='Elevation [m]'), 'right')
+        self.workout_plot.line(self.minutes, self.elevation, legend_label="Elevation", y_range_name="elevation", color="green")
+
 
     def plot_map_bokeh(self):
         # Adding map plot
         self.mapPlot = figure(x_range=(np.min(self.mercatorCoordinates[0])-600, np.max(self.mercatorCoordinates[0])+600), y_range=(np.min(self.mercatorCoordinates[1])-600, np.max(self.mercatorCoordinates[1])+600), x_axis_type="mercator", y_axis_type="mercator")
-        self.mapPlot.add_tile(get_provider(Vendors.CARTODBPOSITRON))
+        # self.mapPlot.add_tile(get_provider(Vendors.CARTODBPOSITRON))
+        self.mapPlot.add_tile(get_provider(Vendors.STAMEN_TERRAIN))
         self.mapLine = self.mapPlot.line(x = 'xCoordinates', y =
                 'yCoordinates', source=self.source)
         # mapCircles = mapPlot.circle('hiddenX', 'hiddenY', size=5, source=source1)
@@ -272,3 +306,4 @@ if __name__ == '__main__':
     # workout.workout_plot_mpl()
     # workout.workout_singleplot_bokeh()
     # workout.workout_multiplot_bokeh()
+    workout.create_plot()
