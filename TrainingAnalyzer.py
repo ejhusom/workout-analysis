@@ -26,12 +26,13 @@ import matplotlib.pyplot as plt
 from matplotlib.gridspec import GridSpec
 from bokeh.plotting import figure
 from bokeh.io import output_file, show
-from bokeh.models import HoverTool, Range1d, LinearAxis, BoxAnnotation, CustomJS, ColumnDataSource, Text, Circle, ColorBar
+from bokeh.models import HoverTool, Range1d, LinearAxis, BoxAnnotation, CustomJS, ColumnDataSource, Text, Circle, ColorBar, Slider
 from bokeh.layouts import column, row
 from bokeh.tile_providers import get_provider, Vendors
 from bokeh.transform import linear_cmap
 from bokeh.palettes import Spectral6
 from xml.dom import minidom
+# import mplleaflet
 # import fitparse
 
 class TrainingAnalyzer(object):
@@ -58,25 +59,43 @@ class TrainingAnalyzer(object):
                 latitude.append(data["RIDE"]["SAMPLES"][i]["LAT"])
                 longitude.append(data["RIDE"]["SAMPLES"][i]["LON"])
             # Converting to arrays
-            self.seconds = np.array(seconds)
-            self.minutes = np.array(seconds)/60
-            self.heartrate = np.array(heartrate)
-            self.heartrate = self.heartrate.astype(int)
             self.kph = np.array(kph)
-            self.elevation = np.array(elevation)
-            self.latitude = np.array(latitude)
-            self.longitude = np.array(longitude)
-            self.mercatorCoordinates = self.convert_to_mercator_coordinates(self.latitude, self.longitude)
+            self.heartrate = np.array(heartrate, dtype=int)
+            # self.heartrate = self.heartrate.astype(int)
+
         elif (fileExtension == ".gpx"):
+            # data = open(workoutFile)
             with open(workoutFile, "r") as f:
                 data = f
+                xmldoc = minidom.parse(data)
 
-            xmldoc = minidom.parse(data)
-            self.track = xmldoc.getElementsByTagName('trkpt')
-            self.elevation = xmldoc.getElementsByTagName('ele')
-            self.datetime = xmldoc.getElementsByTagName('time')
-            self.n_track = len(track)
+            track = xmldoc.getElementsByTagName('trkpt')
+            elevation_xml = xmldoc.getElementsByTagName('ele')
+            datetime_xml = xmldoc.getElementsByTagName('time')
+            sample_count = len(track)
 
+            longitude = []
+            latitude = []
+            elevation = []
+            seconds = []
+            for s in range(sample_count):
+                lon, lat = track[s].attributes['lon'].value,track[s].attributes['lat'].value
+                elev = elevation_xml[s].firstChild.nodeValue
+                longitude.append(float(lon))
+                latitude.append(float(lat))
+                elevation.append(float(elev))
+                # PARSING TIME ELEMENT
+                dt = datetime_xml[s].firstChild.nodeValue
+                time_split = dt.split('T')
+                hms_split = time_split[1].split(':')
+                time_hour = int(hms_split[0])
+                time_minute = int(hms_split[1])
+                time_second = int(hms_split[2].split('Z')[0])
+                total_second = time_hour*3600+time_minute*60+time_second
+                seconds.append(total_second)
+
+            self.heartrate = None
+            self.kph = None
 #        elif (fileExtension=='.fit'):
 #            ################################################
 #            # TODO: Add support for .fit
@@ -100,6 +119,15 @@ class TrainingAnalyzer(object):
         else:
             print("Wring file format. Only .json supported")
             sys.exit(1)
+
+
+        self.seconds = np.array(seconds)
+        self.minutes = np.array(seconds)/60
+        self.elevation = np.array(elevation)
+        self.latitude = np.array(latitude)
+        self.longitude = np.array(longitude)
+        self.mercatorCoordinates = self.convert_to_mercator_coordinates(self.latitude, self.longitude)
+        print(self.mercatorCoordinates[0])
 
     def plot_map_mpl(self):
         """Plots GPS track with matplotlib."""
@@ -183,22 +211,31 @@ class TrainingAnalyzer(object):
         self.source = ColumnDataSource({
             'seconds' : self.seconds, 
             'minutes' : self.minutes, 
-            'heartrate' : self.heartrate, 
-            'speed' : self.kph,
             'elevation' : self.elevation, 
             'xCoordinates' : self.mercatorCoordinates[0], 
             'yCoordinates' : self.mercatorCoordinates[1]
         })
 
-        self.workout_plot = figure(title="Workout", x_axis_label='time [minutes]',
-                plot_width=self.plotwidth, plot_height=self.plotheight, toolbar_location="below")
+        if self.kph is not None:
+            self.source.add(self.kph, 'kph')
+        if self.heartrate is not None:
+            self.source.add(self.heartrate, 'heartrate')
+
+        self.workout_plot = figure(
+                title="Workout", 
+                x_axis_label='time [minutes]',
+                plot_width=self.plotwidth, 
+                plot_height=self.plotheight, 
+                # toolbar_location="below"
+        )
 
         self.workout_plot.yaxis.visible = False
-        self.source1 = ColumnDataSource({'hiddenX' : [], 'hiddenY' : []})
 
-        self.add_heartrate_zones()
-        self.plot_heartrate()
-        self.plot_speed()
+
+        if self.heartrate is not None:
+            self.plot_heartrate()
+        if self.kph is not None:
+            self.plot_speed()
         self.plot_elevation()
         self.plot_map_bokeh()
 
@@ -206,30 +243,43 @@ class TrainingAnalyzer(object):
         self.workout_plot.add_tools(multihover)
         self.workout_plot.legend.click_policy="hide"
 
+        # show(self.workout_plot)
         show(column(self.workout_plot, self.mapPlot))
 
 
     def add_heartrate_zones(self):
 
-        HRzoneLimits = [133,152,161,171]
-        HRzone1 = BoxAnnotation(top=HRzoneLimits[0], fill_alpha=0.1, fill_color='darkgreen')
-        HRzone2 = BoxAnnotation(bottom=HRzoneLimits[0], top=HRzoneLimits[1], fill_alpha=0.1, fill_color='lawngreen')
-        HRzone3 = BoxAnnotation(bottom=HRzoneLimits[1], top=HRzoneLimits[2], fill_alpha=0.1, fill_color='yellow')
-        HRzone4 = BoxAnnotation(bottom=HRzoneLimits[2], top=HRzoneLimits[3], fill_alpha=0.1, fill_color='orange')
-        HRzone5 = BoxAnnotation(bottom=HRzoneLimits[3], fill_alpha=0.1, fill_color='red')
-        self.workout_plot.add_layout(HRzone1)
-        self.workout_plot.add_layout(HRzone2)
-        self.workout_plot.add_layout(HRzone3)
-        self.workout_plot.add_layout(HRzone4)
-        self.workout_plot.add_layout(HRzone5)
+        hr_zones = [
+                [0, "darkgreen", None],
+                [133, "lawngreen", None],
+                [152, "yellow", None],
+                [161, "orange", None],
+                [171, "red", None],
+                [220, "white", None],
+        ]
+
+        self.workout_plot.yaxis.axis_label = 'Heartrate [bpm]'
+        self.workout_plot.y_range = Range1d(
+                start=np.min(self.heartrate)-10,
+                end=np.max(self.heartrate)+10
+        )
+
+        for i in range(len(hr_zones)-1):
+            layout = BoxAnnotation(
+                    bottom = hr_zones[i][0], 
+                    top = hr_zones[i+1][0], 
+                    fill_alpha = 0.1, 
+                    fill_color = hr_zones[i][1]
+            )
+            self.workout_plot.add_layout(layout)
 
     
     def plot_heartrate(self):
 
+        self.add_heartrate_zones()
         # multiplot.yaxis.axis_label = 'Heartrate [bpm]'
         # self.workout_plot.y_range = Range1d(start=np.min(self.heartrate)-10,
         #         end=np.max(self.heartrate)+10)
-        # self.workout_plot.line(self.minutes, self.heartrate, legend_label="HR", color="red")
         self.workout_plot.extra_y_ranges['heartrate'] = Range1d(
                 start=np.min(self.heartrate)-10, end=np.max(self.heartrate)+10)
         self.workout_plot.add_layout(LinearAxis(y_range_name='heartrate',
@@ -245,38 +295,67 @@ class TrainingAnalyzer(object):
 
     def plot_elevation(self):
 
-        self.workout_plot.extra_y_ranges['elevation'] = Range1d(start=np.min(self.elevation)-10, end=np.max(self.elevation)+10)
-        self.workout_plot.add_layout(LinearAxis(y_range_name='elevation', axis_label='Elevation [m]'), 'right')
-        self.workout_plot.line(self.minutes, self.elevation, legend_label="Elevation", y_range_name="elevation", color="green")
+        self.workout_plot.extra_y_ranges['elevation'] = Range1d(
+                start=np.min(self.elevation)-10, 
+                end=np.max(self.elevation)+10
+        )
+        self.workout_plot.add_layout(LinearAxis(
+            y_range_name='elevation', axis_label='Elevation [m]'), 'right'
+        )
+        self.workout_plot.line(self.minutes, self.elevation, 
+                legend_label="Elevation", y_range_name="elevation", color="green"
+        )
 
 
-    def plot_map_bokeh(self):
+    def plot_map_bokeh(self, map_style="terrain"):
         # Adding map plot
-        self.mapPlot = figure(x_range=(np.min(self.mercatorCoordinates[0])-600, np.max(self.mercatorCoordinates[0])+600), y_range=(np.min(self.mercatorCoordinates[1])-600, np.max(self.mercatorCoordinates[1])+600), x_axis_type="mercator", y_axis_type="mercator")
-        # self.mapPlot.add_tile(get_provider(Vendors.CARTODBPOSITRON))
-        self.mapPlot.add_tile(get_provider(Vendors.STAMEN_TERRAIN))
-        self.mapLine = self.mapPlot.line(x = 'xCoordinates', y =
-                'yCoordinates', source=self.source)
-        # mapCircles = mapPlot.circle('hiddenX', 'hiddenY', size=5, source=source1)
-        #
+        self.mapPlot = figure(
+                x_range=(np.min(self.mercatorCoordinates[0])-600, 
+                    np.max(self.mercatorCoordinates[0])+600), 
+                y_range=(np.min(self.mercatorCoordinates[1])-600, 
+                    np.max(self.mercatorCoordinates[1])+600), 
+                x_axis_type="mercator", 
+                y_axis_type="mercator",
+                plot_width=self.plotwidth, 
+                plot_height=self.plotheight, 
+        )
+
+        if map_style == "terrain":
+            self.mapPlot.add_tile(get_provider(Vendors.STAMEN_TERRAIN))
+        elif map_style == "normal":
+            self.mapPlot.add_tile(get_provider(Vendors.CARTODBPOSITRON))
+        else:
+            print("map_style must be either 'terrain' or 'normal'.")
+
+        mapLine = self.mapPlot.line(
+                x = 'xCoordinates', 
+                y = 'yCoordinates', 
+                source=self.source
+        )
+
+        # source1 = ColumnDataSource({'hiddenX' : [], 'hiddenY' : []})
+        # mapCircles = self.mapPlot.circle('hiddenX', 'hiddenY', size=5, source=source1)
+        
         # code = """
         # var data = {'hiddenX' : [], 'hiddenY' : []};
         # var ldata = line.data;
         # var indeces = cb_data.index['1d'].indeces;
-        #
+        
         # for (var i = 0; i < indices.length; i++) {
         #     var ind0 = indices[i]
         #     data['hiddenX'].push(ldata.x[ind0]);
         #     data['hiddenY'].push(ldata.y[ind0]);
         # }
-        #
+        
         # circle.data = data;
         # """
         # callback = CustomJS(args={'line': mapLine.data_source, 'circle': mapCircles.data_source}, code=code)
         # mapHover = HoverTool(tooltips=[("time", "@minutes")], callback=callback, renderers=[mapCircles])
+        mapHover = HoverTool(tooltips=[("time", "@minutes")],
+            point_policy="snap_to_data")
         # multihover = HoverTool(tooltips=[("", "@y")], mode="vline", point_policy="snap_to_data", callback=callback)
-        # mapPlot.add_tools(mapHover)
-        # multiplot.add_tools(multihover)
+        self.mapPlot.add_tools(mapHover)
+        # self.workout_plot.add_tools(multihover)
 
         return self.mapPlot
 
@@ -289,6 +368,7 @@ class TrainingAnalyzer(object):
         x = r_major * np.radians(lon)
         scale = x/lon
         y = 180.0/np.pi * np.log(np.tan(np.pi/4.0 + lat * (np.pi/180.0)/2.0)) * scale
+        
         return (x, y)
 
 
@@ -302,7 +382,7 @@ if __name__ == '__main__':
     workout = TrainingAnalyzer(workoutFile)
 
     # TODO: Make it possible to choose plot from command line.
-    # workout.map_plot_mpl()
+    # workout.plot_map_mpl()
     # workout.workout_plot_mpl()
     # workout.workout_singleplot_bokeh()
     # workout.workout_multiplot_bokeh()
