@@ -28,6 +28,7 @@ from bokeh.plotting import figure
 from bokeh.io import output_file, show
 from bokeh.models import HoverTool, Range1d, LinearAxis, BoxAnnotation, CustomJS, ColumnDataSource, Text, Circle, ColorBar, Slider
 from bokeh.layouts import column, row
+from bokeh.embed import components
 from bokeh.tile_providers import get_provider, Vendors
 from bokeh.transform import linear_cmap
 from bokeh.palettes import Spectral6
@@ -127,7 +128,6 @@ class TrainingAnalyzer(object):
         self.latitude = np.array(latitude)
         self.longitude = np.array(longitude)
         self.mercatorCoordinates = self.convert_to_mercator_coordinates(self.latitude, self.longitude)
-        print(self.mercatorCoordinates[0])
 
     def plot_map_mpl(self):
         """Plots GPS track with matplotlib."""
@@ -207,7 +207,7 @@ class TrainingAnalyzer(object):
 
         output_file("workout_plot.html")
         self.plotheight = 400
-        self.plotwidth = 1200
+        self.plotwidth = 600
         self.source = ColumnDataSource({
             'seconds' : self.seconds, 
             'minutes' : self.minutes, 
@@ -243,8 +243,13 @@ class TrainingAnalyzer(object):
         self.workout_plot.add_tools(multihover)
         self.workout_plot.legend.click_policy="hide"
 
-        # show(self.workout_plot)
-        show(column(self.workout_plot, self.mapPlot))
+        workout_script, workout_div = components(self.workout_plot)
+        map_script, map_div = components(self.mapPlot)
+        with open("map_components.txt", "w") as f:
+            f.write(map_div)
+            f.write(map_script)
+
+        # show(column(self.workout_plot, self.mapPlot))
 
 
     def add_heartrate_zones(self):
