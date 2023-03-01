@@ -22,17 +22,18 @@ def elevationGainRiseOverRun(incline, distance):
 def elevationGainTime(incline, speed, time_in_min):
     time_in_h = time_in_min / 60.0
     distance = speed*time_in_h
+    gain = elevationGain(incline, distance)
+    return gain
 
 incline = float(input("Incline (percentage)="))
-distance = float(input("Distance (km)="))
-#speed = float(input("Speed (km/h)="))
-time = float(input("Time (min)="))
+# distance = float(input("Distance (km)="))
+speed = float(input("Speed (km/h)="))
+time_in_min = float(input("Time (min)="))
 
-gain = elevationGain(incline, distance)
-#time = distance/speed
-time /= 60
-speed = distance/time
+gain = elevationGainTime(incline, speed, time_in_min)
+distance = speed*time_in_min/60.0
 print("Elevation gain: ", gain)
 print("Speed: ", speed)
-print("Vertical speed (m/min): ", gain/(time*60))
-print("Vertical speed (m/hr): ", gain/time)
+print("Distance: ", distance)
+print("Vertical speed (m/min): ", gain/time_in_min)
+print("Vertical speed (m/hr): ", gain/(time_in_min/60.0))
