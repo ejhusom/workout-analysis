@@ -10,6 +10,7 @@ import sys
 import numpy as np
 
 def elevationGain(incline, distance):
+    """Calculates elevation gain on a treadmill"""
     incline = incline/100
     elevationGain = distance*np.cos(np.arctan(incline))*incline
     return elevationGain*1000
