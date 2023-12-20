@@ -24,7 +24,7 @@ import numpy as np
 import sys, os, time, io, json, pprint, csv
 import matplotlib.pyplot as plt
 from matplotlib.gridspec import GridSpec
-from bokeh.plotting import figure
+from bokeh.plotting import figure, save
 from bokeh.io import output_file, show
 from bokeh.models import HoverTool, Range1d, LinearAxis, BoxAnnotation, CustomJS, ColumnDataSource, Text, Circle, ColorBar, Slider
 from bokeh.layouts import column, row
@@ -89,9 +89,9 @@ class TrainingAnalyzer(object):
                 dt = datetime_xml[s].firstChild.nodeValue
                 time_split = dt.split('T')
                 hms_split = time_split[1].split(':')
-                time_hour = int(hms_split[0])
-                time_minute = int(hms_split[1])
-                time_second = int(hms_split[2].split('Z')[0])
+                time_hour = int(float(hms_split[0]))
+                time_minute = int(float(hms_split[1]))
+                time_second = int(float(hms_split[2].split('Z')[0]))
                 total_second = time_hour*3600+time_minute*60+time_second
                 seconds.append(total_second)
 
@@ -149,7 +149,7 @@ class TrainingAnalyzer(object):
         # FIXME: GPS plot has wrong axes ratio.
         # TODO: Add background map layer for GPS plot.
 
-        plt.style.use('seaborn')
+        # plt.style.use('seaborn')
         plt.rcParams.update({'font.size': 15})
         plt.rc('xtick', labelsize=15)
         plt.rc('ytick', labelsize=15)
@@ -183,7 +183,7 @@ class TrainingAnalyzer(object):
         plotheight = 400
         hover = HoverTool(tooltips=[("", "@y")], mode="vline", point_policy="snap_to_data")
 
-        plotHR = figure(title="heartrate", x_axis_label='time [minutes]', y_axis_label='heart rate [bpm]', plot_width=plotwidth, plot_height=plotheight, toolbar_location="below")
+        plotHR = figure(title="heartrate", x_axis_label='time [minutes]', y_axis_label='heart rate [bpm]')#, plot_width=plotwidth, plot_height=plotheight, toolbar_location="below")
         plotHR.add_tools(hover)
         plotHR.line(self.minutes, self.heartrate, color="red")
 
@@ -224,8 +224,8 @@ class TrainingAnalyzer(object):
         self.workout_plot = figure(
                 title="Workout", 
                 x_axis_label='time [minutes]',
-                plot_width=self.plotwidth, 
-                plot_height=self.plotheight, 
+                # plot_width=self.plotwidth, 
+                # plot_height=self.plotheight, 
                 # toolbar_location="below"
         )
 
@@ -245,9 +245,13 @@ class TrainingAnalyzer(object):
 
         workout_script, workout_div = components(self.workout_plot)
         map_script, map_div = components(self.mapPlot)
+
         with open("map_components.txt", "w") as f:
             f.write(map_div)
             f.write(map_script)
+
+        save(self.workout_plot)
+        save(self.mapPlot)
 
         # show(column(self.workout_plot, self.mapPlot))
 
@@ -321,8 +325,8 @@ class TrainingAnalyzer(object):
                     np.max(self.mercatorCoordinates[1])+600), 
                 x_axis_type="mercator", 
                 y_axis_type="mercator",
-                plot_width=self.plotwidth, 
-                plot_height=self.plotheight, 
+                # plot_width=self.plotwidth, 
+                # plot_height=self.plotheight, 
         )
 
         if map_style == "terrain":
